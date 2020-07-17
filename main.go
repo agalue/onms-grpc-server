@@ -4,7 +4,7 @@
 //
 // TODO
 // - Client Certificate Validation
-// - Prometheus Metrics
+// - Prometheus Metrics for Kafka
 package main
 
 import (
@@ -15,6 +15,7 @@ import (
 	"log"
 	"math"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -25,10 +26,15 @@ import (
 	"github.com/agalue/onms-grpc-server/protobuf/rpc"
 	"github.com/agalue/onms-grpc-server/protobuf/sink"
 	"github.com/golang/protobuf/proto"
+
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
+
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
@@ -39,7 +45,8 @@ const (
 	sinkModulePrefix             = "Sink"
 	rpcRequestTopicName          = "rpc-request"
 	rpcResponseTopicName         = "rpc-response"
-	defaultPort                  = 8990
+	defaultGrpcPort              = 8990
+	defaultHTTPPort              = 2112
 	defaultMaxByfferSize         = 921600
 	defaultInstanceID            = "OpenNMS"
 )
@@ -59,7 +66,8 @@ func (p *PropertiesFlag) Set(value string) error {
 
 // OnmsGrpcIpcServer represents an OpenNMS gRPC Server instance
 type OnmsGrpcIpcServer struct {
-	Port                    int
+	GrpcPort                int
+	HTTPPort                int
 	KafkaBootstrap          string
 	KafkaProducerProperties PropertiesFlag
 	KafkaConsumerProperties PropertiesFlag
@@ -126,36 +134,45 @@ func (srv *OnmsGrpcIpcServer) Start() error {
 		}
 	}()
 
-	// Initialize TCP Listener
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", srv.Port))
-	if err != nil {
-		return fmt.Errorf("cannot initialize listener: %v", err)
-	}
-
 	// Initialize gRPC Server
+	options := make([]grpc.ServerOption, 0)
 	if srv.TLSEnabled {
 		creds, err := credentials.NewServerTLSFromFile(srv.TLSCertFile, srv.TLSKeyFile)
 		if err != nil {
 			return fmt.Errorf("Failed to setup TLS: %v", err)
 		}
-		srv.server = grpc.NewServer(grpc.Creds(creds))
-	} else {
-		srv.server = grpc.NewServer()
+		options = append(options, grpc.Creds(creds))
 	}
+	options = append(options, grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor))
+	srv.server = grpc.NewServer(options...)
 	srv.hs = health.NewServer()
 
-	// Configure Services
+	// Configure gRPC Services
 	ipc.RegisterOpenNMSIpcServer(srv.server, srv)
 	grpc_health_v1.RegisterHealthServer(srv.server, srv.hs)
-
-	// Start gRPC Server
+	grpc_prometheus.Register(srv.server)
 	jsonBytes, _ = json.MarshalIndent(srv.server.GetServiceInfo(), "", "  ")
 	log.Printf("gRPC server info: %s", string(jsonBytes))
+
+	// Initialize TCP Listener
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", srv.GrpcPort))
+	if err != nil {
+		return fmt.Errorf("cannot initialize listener: %v", err)
+	}
+
+	// Start gRPC Server
 	go func() {
-		log.Printf("starting gRPC server on port %d\n", srv.Port)
+		log.Printf("starting gRPC server on port %d\n", srv.GrpcPort)
 		if err = srv.server.Serve(listener); err != nil {
 			log.Fatalf("could not serve: %v", err)
 		}
+	}()
+
+	// Start HTTP Server
+	go func() {
+		log.Printf("starting Prometheus Metrics server %d\n", srv.HTTPPort)
+		http.Handle("/metrics", promhttp.Handler())
+		http.ListenAndServe(fmt.Sprintf(":%d", srv.HTTPPort), nil)
 	}()
 
 	// Initialize Delay Queue Processor
@@ -466,7 +483,8 @@ func (srv *OnmsGrpcIpcServer) sendToKafka(topic string, key string, value []byte
 
 func main() {
 	srv := &OnmsGrpcIpcServer{}
-	flag.IntVar(&srv.Port, "port", defaultPort, "gRPC Server Listener Port")
+	flag.IntVar(&srv.GrpcPort, "port", defaultGrpcPort, "gRPC Server Listener Port")
+	flag.IntVar(&srv.HTTPPort, "http-port", defaultHTTPPort, "HTTP Server Listener Port (Prometheus Metrics)")
 	flag.StringVar(&srv.OnmsInstanceID, "instance-id", defaultInstanceID, "OpenNMS Instance ID")
 	flag.StringVar(&srv.KafkaBootstrap, "bootstrap", "localhost:9092", "Kafka Bootstrap Server")
 	flag.Var(&srv.KafkaProducerProperties, "producer-cfg", "Kafka Producer configuration entry (can be used multiple times)\nfor instance: acks=1")
