@@ -10,4 +10,5 @@ require (
 	google.golang.org/grpc v1.30.0
 	google.golang.org/protobuf v1.25.0
 	gopkg.in/confluentinc/confluent-kafka-go.v1 v1.4.2
+	gotest.tools v2.2.0+incompatible
 )
