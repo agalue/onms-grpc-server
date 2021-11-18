@@ -17,7 +17,6 @@ service OpenNMSIpc {
 message Empty {
 }
 
-
 message RpcRequestProto {
     string rpc_id = 1;
     bytes rpc_content = 2;

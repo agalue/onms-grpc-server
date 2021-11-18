@@ -46,6 +46,10 @@ func (mock *mockConsumer) Close() error {
 	return nil
 }
 
+func (mock *mockConsumer) Unsubscribe() error {
+	return nil
+}
+
 type mockProducer struct {
 	eventChannel chan kafka.Event
 	messages     []*kafka.Message
@@ -107,56 +111,6 @@ func (mock *mockRPCStreamingServer) RecvMsg(m interface{}) error {
 
 // Tests
 
-func TestPropertiesFlag(t *testing.T) {
-	properties := PropertiesFlag{}
-	properties.Set("a")
-	properties.Set("b")
-	assert.Equal(t, 2, len(properties))
-	assert.Equal(t, "a, b", properties.String())
-}
-
-func TestRoundRobinHandlerMap(t *testing.T) {
-	handlerMap := new(RoundRobinHandlerMap)
-	handlerMap.Set("001", &mockRPCStreamingServer{"H1"})
-	handlerMap.Set("002", &mockRPCStreamingServer{"H2"})
-	handlerMap.Set("003", &mockRPCStreamingServer{"H3"})
-	// Verify Size
-	assert.Equal(t, 3, len(handlerMap.handlerIDs))
-	// Verify round-robin logic
-	h := handlerMap.Get()
-	assert.Equal(t, 1, handlerMap.current)
-	assert.Equal(t, "H2", h.Context().Value(ID_FIELD))
-	h = handlerMap.Get()
-	assert.Equal(t, 2, handlerMap.current)
-	assert.Equal(t, "H3", h.Context().Value(ID_FIELD))
-	h = handlerMap.Get()
-	assert.Equal(t, 0, handlerMap.current)
-	assert.Equal(t, "H1", h.Context().Value(ID_FIELD))
-	// Verify contains logic
-	assert.Assert(t, handlerMap.Contains("001"))
-	assert.Assert(t, !handlerMap.Contains("004"))
-	// Verify update
-	handlerMap.Set("003", &mockRPCStreamingServer{"H33"})
-	assert.Equal(t, 3, len(handlerMap.handlerIDs))
-	h = handlerMap.Find("003")
-	assert.Equal(t, "H33", h.Context().Value(ID_FIELD))
-}
-
-func TestUpdateKafkaConfig(t *testing.T) {
-	srv, _, _ := createMockServer()
-	properties := PropertiesFlag{
-		"acks=1",
-		"max.poll.records=50",
-		"max.partition.fetch.bytes=1000000",
-	}
-	cfg := &kafka.ConfigMap{}
-	err := srv.updateKafkaConfig(cfg, properties)
-	assert.NilError(t, err)
-	acks, ok := cfg.Get("acks", "0")
-	assert.Assert(t, ok)
-	assert.Equal(t, "1", acks)
-}
-
 func TestGetSinkTopic(t *testing.T) {
 	srv, _, _ := createMockServer()
 	topic := srv.getSinkTopic("Syslog")
@@ -184,13 +138,13 @@ func TestTransformAndSendSinkMessageSingle(t *testing.T) {
 
 func TestTransformAndSendSinkMessageMultiple(t *testing.T) {
 	srv, producer, _ := createMockServer()
-	srv.MaxBufferSize = 4
+	srv.config.MaxBufferSize = 4
 	totalChunks := 5
 	data := []byte("ABCDEFGHIJKLMNOPQRST")
-	assert.Equal(t, len(data), totalChunks*srv.MaxBufferSize)
+	assert.Equal(t, len(data), totalChunks*srv.config.MaxBufferSize)
 	for chunk := 0; chunk < totalChunks; chunk++ {
-		idx := chunk * srv.MaxBufferSize
-		content := data[idx : idx+srv.MaxBufferSize]
+		idx := chunk * srv.config.MaxBufferSize
+		content := data[idx : idx+srv.config.MaxBufferSize]
 		msg := &ipc.SinkMessage{
 			MessageId: "001",
 			Location:  "Test",
@@ -315,13 +269,13 @@ func TestTransformAndSendRPCMessageSingle(t *testing.T) {
 
 func TestTransformAndSendRPCMessageMultiple(t *testing.T) {
 	srv, producer, _ := createMockServer()
-	srv.MaxBufferSize = 4
+	srv.config.MaxBufferSize = 4
 	totalChunks := 5
 	data := []byte("ABCDEFGHIJKLMNOPQRST")
-	assert.Equal(t, len(data), totalChunks*srv.MaxBufferSize)
+	assert.Equal(t, len(data), totalChunks*srv.config.MaxBufferSize)
 	for chunk := 0; chunk < totalChunks; chunk++ {
-		idx := chunk * srv.MaxBufferSize
-		content := data[idx : idx+srv.MaxBufferSize]
+		idx := chunk * srv.config.MaxBufferSize
+		content := data[idx : idx+srv.config.MaxBufferSize]
 		msg := &ipc.RpcResponseProto{
 			Location:   "Test",
 			ModuleId:   "Echo",
@@ -430,17 +384,9 @@ func TestSendRequest(t *testing.T) {
 	assert.Equal(t, "001", r.RpcId)
 }
 
-func TestEndToEnd(t *testing.T) {
-	srv, _, _ := createMockServer()
-	err := srv.Start()
-	assert.NilError(t, err)
-	time.Sleep(5 * time.Second)
-	srv.Stop()
-}
-
 // Helper methods
 
-func createMockServer() (*OnmsGrpcIpcServer, *mockProducer, *mockConsumer) {
+func createMockServer() (*OnmsGrpcIPC, *mockProducer, *mockConsumer) {
 	producer := &mockProducer{
 		eventChannel: make(chan kafka.Event),
 	}
@@ -450,16 +396,16 @@ func createMockServer() (*OnmsGrpcIpcServer, *mockProducer, *mockConsumer) {
 	consumers := make(map[string]KafkaConsumer)
 	consumers["Test"] = consumer
 	logger, _ := zap.NewDevelopment()
-	srv := &OnmsGrpcIpcServer{
+	cfg := &ServerConfig{
 		OnmsInstanceID: "OpenNMS",
 		GrpcPort:       defaultGrpcPort,
 		HTTPPort:       defaultHTTPPort,
 		MaxBufferSize:  defaultMaxByfferSize,
-		Logger:         logger,
-		producer:       producer,
-		consumers:      consumers,
 	}
-	srv.initVariables()
-	srv.log = srv.Logger.Sugar()
+	srv := &OnmsGrpcIPC{
+		producer:  producer,
+		consumers: consumers,
+	}
+	srv.initVariables(cfg, logger.Sugar())
 	return srv, producer, consumer
 }

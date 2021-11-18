@@ -100,6 +100,7 @@ services:
     environment:
     - TZ=America/New_York
     - BOOTSTRAP_SERVER=kafka1:9092
+    - LOG_LEVEL=debug
     healthcheck:
       test: /bin/grpc_health_probe -addr ':8990' -rpc-timeout 2s
       interval: 30s

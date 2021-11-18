@@ -56,5 +56,8 @@ fi
 if [ ! -z "${MAX_BUFFER_SIZE}" ]; then
   OPTIONS+=(-max-buffer-size "${MAX_BUFFER_SIZE}")
 fi
+if [ ! -z "${LOG_LEVEL}" ]; then
+  OPTIONS+=(-log-level "${LOG_LEVEL}")
+fi
 
 exec /bin/onms-grpc-server ${OPTIONS[@]} ${PRODUCER[@]} ${CONSUMER[@]}
