@@ -1,5 +1,4 @@
 # Basic Settings
-http-url: "http://opennms:8980/opennms"
 id: "docker-minion-02"
 location: "Raleigh"
 

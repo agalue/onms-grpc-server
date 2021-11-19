@@ -88,7 +88,6 @@ services:
 
   grpc1:
     build: ..
-    image: agalue/onms-grpc-server
     container_name: grpc1
     hostname: grpc1
     depends_on:
@@ -108,7 +107,7 @@ services:
       retries: 3
 
   opennms:
-    image: opennms/horizon:28.1.1
+    image: opennms/horizon:29.0.0
     container_name: opennms
     hostname: opennms
     depends_on:
@@ -138,7 +137,7 @@ services:
   minion1:
     container_name: minion1
     hostname: minion1
-    image: opennms/minion:28.1.1
+    image: opennms/minion:29.0.0
     depends_on:
       grpc1:
         condition: service_healthy
@@ -149,8 +148,6 @@ services:
     - ./minion1.yaml:/opt/minion/minion-config.yaml
     environment:
     - TZ=America/New_York
-    - OPENNMS_HTTP_USER=admin
-    - OPENNMS_HTTP_PASS=admin
     - JAVA_OPTS=-Xms1024m -Xmx1024m -XX:+UseG1GC -XX:+UseStringDeduplication
     healthcheck:
       test: /health.sh
@@ -161,7 +158,7 @@ services:
   minion2:
     container_name: minion2
     hostname: minion2
-    image: opennms/minion:28.1.1
+    image: opennms/minion:29.0.0
     depends_on:
       grpc1:
         condition: service_healthy
@@ -172,8 +169,6 @@ services:
     - ./minion2.yaml:/opt/minion/minion-config.yaml
     environment:
     - TZ=America/New_York
-    - OPENNMS_HTTP_USER=admin
-    - OPENNMS_HTTP_PASS=admin
     - JAVA_OPTS=-Xms1024m -Xmx1024m -XX:+UseG1GC -XX:+UseStringDeduplication
     healthcheck:
       test: /health.sh
@@ -184,7 +179,7 @@ services:
   minion3:
     container_name: minion3
     hostname: minion3
-    image: opennms/minion:28.1.1
+    image: opennms/minion:29.0.0
     depends_on:
       grpc1:
         condition: service_healthy
@@ -195,8 +190,6 @@ services:
     - ./minion3.yaml:/opt/minion/minion-config.yaml
     environment:
     - TZ=America/New_York
-    - OPENNMS_HTTP_USER=admin
-    - OPENNMS_HTTP_PASS=admin
     - JAVA_OPTS=-Xms1024m -Xmx1024m -XX:+UseG1GC -XX:+UseStringDeduplication
     healthcheck:
       test: /health.sh

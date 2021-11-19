@@ -119,6 +119,7 @@ func (srv *OnmsGrpcIPC) RpcStreaming(stream ipc.OpenNMSIpc_RpcStreamingServer) e
 			srv.transformAndSendRPCMessage(msg)
 		}
 	}
+	// srv.removeRPCHandler(msg.Location, msg.SystemId, stream)
 	srv.log.Warnf("terminating RPC API stream")
 	return nil
 }
@@ -315,11 +316,9 @@ func (srv *OnmsGrpcIPC) startConsumingForLocation(location string) error {
 	go func() {
 		srv.log.Infof("starting RPC consumer for location %s", location)
 		for {
-			event := consumer.Poll(100)
-			switch e := event.(type) {
-			case *kafka.Message:
+			if msg, err := consumer.ReadMessage(-1); err == nil {
 				rpcMsg := &rpc.RpcMessageProto{}
-				if err := proto.Unmarshal(e.Value, rpcMsg); err != nil {
+				if err := proto.Unmarshal(msg.Value, rpcMsg); err != nil {
 					srv.log.Warnf("invalid message received: %v", err)
 					continue
 				}
@@ -327,8 +326,8 @@ func (srv *OnmsGrpcIPC) startConsumingForLocation(location string) error {
 				if request != nil {
 					srv.sendRequest(location, request)
 				}
-			case kafka.Error:
-				srv.log.Errorf("kafka consumer error %v", e)
+			} else {
+				srv.log.Errorf("kafka consumer error %v", err)
 				srv.metricReceivedErrors.WithLabelValues(location).Inc()
 			}
 		}
