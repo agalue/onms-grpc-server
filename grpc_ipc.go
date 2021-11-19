@@ -108,7 +108,7 @@ func (srv *OnmsGrpcIPC) RpcStreaming(stream ipc.OpenNMSIpc_RpcStreamingServer) e
 			if errStatus, ok := status.FromError(err); ok {
 				return status.Errorf(errStatus.Code(), "cannot receive RPC API response: %v ", errStatus.Message())
 			}
-			return status.Errorf(codes.Unknown, "cannot receive RPC API response: %v", err)
+			return status.Errorf(codes.Unknown, "unknown problem with RPC API response: %v", err)
 		}
 		if srv.isHeaders(msg) {
 			srv.addRPCHandler(msg.Location, msg.SystemId, stream)
@@ -344,7 +344,7 @@ func (srv *OnmsGrpcIPC) createRPCRequest(location string, rpcMsg *rpc.RpcMessage
 	rpcContent := rpcMsg.RpcContent
 	srv.metricReceivedMessages.WithLabelValues(location).Inc()
 	srv.metricReceivedBytes.WithLabelValues(location).Add(float64(len(rpcContent)))
-	srv.log.Infof("processing RPC message %s %d/%d at location %s", rpcMsg.RpcId, rpcMsg.CurrentChunkNumber+1, rpcMsg.TotalChunks, location)
+	srv.log.Debugf("processing %s RPC message %s %d/%d at location %s", rpcMsg.ModuleId, rpcMsg.RpcId, rpcMsg.CurrentChunkNumber+1, rpcMsg.TotalChunks, location)
 	srv.rpcDelayQueue.Store(rpcMsg.RpcId, rpcMsg.ExpirationTime)
 	// For larger messages which get split into multiple chunks, cache them until all of them arrive
 	if rpcMsg.TotalChunks > 1 {
