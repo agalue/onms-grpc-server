@@ -1,3 +1,7 @@
+// The following class should serve as inspiration:
+// https://github.com/OpenNMS/opennms/blob/master/core/ipc/twin/grpc/publisher/src/main/java/org/opennms/core/ipc/twin/grpc/publisher/GrpcTwinPublisher.java
+// https://github.com/OpenNMS/opennms/blob/master/core/ipc/twin/common/src/main/java/org/opennms/core/ipc/twin/common/AbstractTwinPublisher.java
+
 package main
 
 import (
@@ -31,6 +35,9 @@ func (srv *OnmsGrpcTwin) Stop() {
 
 // SinkStreaming streams Twin updates from OpenNMS to Minion (server-side streaming gRPC).
 func (srv *OnmsGrpcTwin) SinkStreaming(header *twin.MinionHeader, stream twin.OpenNMSTwinIpc_SinkStreamingServer) error {
+	// Source: https://github.com/OpenNMS/opennms/blob/master/core/ipc/twin/grpc/publisher/src/main/java/org/opennms/core/ipc/twin/grpc/publisher/GrpcTwinPublisher.java#L158-L174
+	// I need a session tracker, a map of streams/handlers by location and a map of streams/handlers by systemID (similar to IPC-RPC)
+
 	/*
 		srv.log.Debugf("received Twin Sink message from %s at location %s", header.SystemId, header.Location)
 		srv.log.Warnf("Twin API for Sink not implemented, ignoring") // FIXME
@@ -40,6 +47,9 @@ func (srv *OnmsGrpcTwin) SinkStreaming(header *twin.MinionHeader, stream twin.Op
 
 // RpcStreaming streams Twin request/response between OpenNMS and Minion (bidirectional streaming gRPC).
 func (srv *OnmsGrpcTwin) RpcStreaming(stream twin.OpenNMSTwinIpc_RpcStreamingServer) error {
+	// Source: https://github.com/OpenNMS/opennms/blob/master/core/ipc/twin/grpc/publisher/src/main/java/org/opennms/core/ipc/twin/grpc/publisher/GrpcTwinPublisher.java#L127-L135
+	// There are Global Responses (OpenNMS.twin.response) and Location Responses (OpenNMS.twin.response.$LocationName).
+
 	/*
 		srv.log.Infof("starting Twin RPC API stream")
 		for {
